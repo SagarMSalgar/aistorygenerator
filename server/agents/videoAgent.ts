@@ -63,9 +63,11 @@ export const videoAgent = {
       
       // Each scene is shown for around 15 seconds
       visuals.scenes.forEach((scene, index) => {
-        // Remove the domain part from the URL
-        const sceneUrl = new URL(scene.imageUrl);
-        const localScenePath = path.join('dist/public', sceneUrl.pathname);
+        // Handle relative URLs properly without URL constructor
+        const imageUrl = scene.imageUrl;
+        const localScenePath = imageUrl.startsWith('/') 
+          ? path.join('dist/public', imageUrl) 
+          : path.join('dist/public', '/', imageUrl);
         
         // Add scene to script with duration
         scriptContent += `file '${localScenePath.replace(/\\/g, "/")}'\n`;
@@ -76,8 +78,10 @@ export const videoAgent = {
       await fs.writeFile(ffmpegScript, scriptContent);
       
       // Get local path to the music file
-      const musicUrl = new URL(music.url);
-      const localMusicPath = path.join('dist/public', musicUrl.pathname);
+      const musicPath = music.url;
+      const localMusicPath = musicPath.startsWith('/') 
+        ? path.join('dist/public', musicPath) 
+        : path.join('dist/public', '/', musicPath);
       
       // Build FFmpeg command to compile the video
       const ffmpegArgs = [
@@ -112,8 +116,10 @@ export const videoAgent = {
       });
       
       // Create a thumbnail from the first scene
-      const firstSceneUrl = new URL(visuals.scenes[0].imageUrl);
-      const localFirstScenePath = path.join('dist/public', firstSceneUrl.pathname);
+      const firstSceneImageUrl = visuals.scenes[0].imageUrl;
+      const localFirstScenePath = firstSceneImageUrl.startsWith('/') 
+        ? path.join('dist/public', firstSceneImageUrl) 
+        : path.join('dist/public', '/', firstSceneImageUrl);
       
       await new Promise<void>((resolve, reject) => {
         const ffmpeg = spawn('ffmpeg', [
