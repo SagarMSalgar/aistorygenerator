@@ -3,6 +3,7 @@ import { createServer, type Server } from "http";
 import { storage } from "./storage";
 import { nanoid } from "nanoid";
 import { ProjectStatus } from "@shared/schema";
+import path from "path";
 import { scriptAgent } from "./agents/scriptAgent";
 import { characterAgent } from "./agents/characterAgent";
 import { dialogueAgent } from "./agents/dialogueAgent";
@@ -324,6 +325,33 @@ export async function registerRoutes(app: Express): Promise<Server> {
       console.error("Error fetching shared project:", error);
       return res.status(500).json({ message: "Failed to fetch shared project" });
     }
+  });
+
+  // Serve generated files with proper content-type headers
+  app.get('/generated/:filename', (req, res) => {
+    const filename = req.params.filename;
+    const filePath = path.resolve(`dist/public/generated/${filename}`);
+    
+    // Set content type based on file extension
+    if (filename.endsWith('.svg')) {
+      res.setHeader('Content-Type', 'image/svg+xml');
+    } else if (filename.endsWith('.png')) {
+      res.setHeader('Content-Type', 'image/png');
+    } else if (filename.endsWith('.jpg') || filename.endsWith('.jpeg')) {
+      res.setHeader('Content-Type', 'image/jpeg');
+    } else if (filename.endsWith('.mp3')) {
+      res.setHeader('Content-Type', 'audio/mpeg');
+    } else if (filename.endsWith('.mp4')) {
+      res.setHeader('Content-Type', 'video/mp4');
+    }
+    
+    // Send the file
+    res.sendFile(filePath, (err) => {
+      if (err) {
+        console.error(`Error serving file ${filename}:`, err);
+        res.status(404).send('File not found');
+      }
+    });
   });
 
   const httpServer = createServer(app);
