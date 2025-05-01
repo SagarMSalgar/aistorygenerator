@@ -32,15 +32,30 @@ export default function PreviewPanel() {
       
       <div className="p-6">
         {/* Video Preview Container */}
-        <div className="preview-container bg-neutral-900 rounded-lg overflow-hidden mb-4">
-          <div className="w-full h-full flex items-center justify-center relative">
+        <div className="preview-container bg-neutral-900 rounded-lg overflow-hidden mb-4" style={{ minHeight: "300px" }}>
+          <div className="w-full h-full flex items-center justify-center relative" style={{ minHeight: "300px" }}>
             {finalVideo?.url ? (
-              <video 
-                src={finalVideo.url} 
-                controls 
-                poster={finalVideo.thumbnailUrl}
-                className="w-full h-full object-contain"
-              />
+              finalVideo.duration === "Image Preview" ? (
+                // If it's an image preview (not a real video), show the image
+                <img 
+                  src={finalVideo.url} 
+                  alt="Final cartoon scene" 
+                  className="w-full h-full object-contain"
+                  style={{ maxHeight: "300px", margin: "0 auto" }}
+                  onError={(e) => {
+                    console.error("Final image failed to load:", finalVideo.url);
+                    e.currentTarget.src = "/generated/fallback-thumbnail.svg";
+                  }}
+                />
+              ) : (
+                // If it's a real video, use the video player
+                <video 
+                  src={finalVideo.url} 
+                  controls 
+                  poster={finalVideo.thumbnailUrl}
+                  className="w-full h-full object-contain"
+                />
+              )
             ) : (
               <>
                 <div className="absolute inset-0 flex items-center justify-center">
@@ -64,7 +79,12 @@ export default function PreviewPanel() {
                   <img 
                     src={previewImage} 
                     alt="Video preview" 
-                    className="w-full h-full object-cover opacity-60"
+                    className="w-full h-full object-contain opacity-80"
+                    style={{ maxHeight: "300px", margin: "0 auto" }}
+                    onError={(e) => {
+                      console.error("Image failed to load:", previewImage);
+                      e.currentTarget.src = "/generated/fallback-thumbnail.svg";
+                    }}
                   />
                 ) : (
                   <div className="w-full h-full bg-neutral-800"></div>

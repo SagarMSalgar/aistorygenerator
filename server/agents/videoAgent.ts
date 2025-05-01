@@ -28,7 +28,7 @@ export const videoAgent = {
       const thumbnailFileName = `thumbnail-${videoId}.jpg`;
       const thumbnailPath = path.join(outputDir, thumbnailFileName);
 
-      // Create a text file with the dialogue timestamps
+      // Create a text file with the dialogue timestamps (we'll still use this for reference)
       const subtitleFile = path.join(outputDir, `subtitle-${videoId}.srt`);
       let subtitleContent = '';
       
@@ -53,49 +53,7 @@ export const videoAgent = {
       
       await fs.writeFile(subtitleFile, subtitleContent);
 
-      // Create a script file for FFmpeg
-      const ffmpegScript = path.join(outputDir, `ffmpeg-script-${videoId}.txt`);
-      let scriptContent = '';
-      
-      // Prepare the scene durations - total 60 seconds
-      const sceneCount = visuals.scenes.length;
-      const sceneDuration = 60 / sceneCount; // seconds per scene
-      
-      // Each scene is shown for around 15 seconds
-      visuals.scenes.forEach((scene, index) => {
-        try {
-          // Handle relative URLs properly
-          const imageUrl = scene.imageUrl;
-          
-          // Get absolute path to the image file
-          const localScenePath = path.resolve(
-            imageUrl.startsWith('/') 
-              ? path.join('dist/public', imageUrl) 
-              : path.join('dist/public', imageUrl)
-          );
-          
-          // Verify file exists
-          console.log(`Checking scene image at: ${localScenePath}`);
-          
-          // Add scene to script with duration
-          scriptContent += `file '${localScenePath.replace(/\\/g, "/")}'\n`;
-          scriptContent += `duration ${sceneDuration}\n`;
-        } catch (error) {
-          console.error(`Error processing scene ${index}:`, error);
-          
-          // Use fallback scene if there's an error
-          const fallbackPath = path.resolve(`dist/public/generated/fallback-scene-${index + 1}.svg`);
-          console.log(`Using fallback scene: ${fallbackPath}`);
-          
-          scriptContent += `file '${fallbackPath.replace(/\\/g, "/")}'\n`;
-          scriptContent += `duration ${sceneDuration}\n`;
-        }
-      });
-      
-      // Write the FFmpeg script
-      await fs.writeFile(ffmpegScript, scriptContent);
-      
-      // Get local path to the music file
+      // Get the music file path
       const musicPath = music.url;
       
       // Create absolute path to the music file
@@ -114,97 +72,45 @@ export const videoAgent = {
         console.log(`Using fallback music at: ${localMusicPath}`);
       }
       
-      // Build FFmpeg command to compile the video
-      const ffmpegArgs = [
-        '-f', 'concat',
-        '-safe', '0',
-        '-i', ffmpegScript,
-        '-i', localMusicPath,
-        '-c:v', 'libx264',
-        '-c:a', 'aac',
-        '-b:a', '128k',
-        '-shortest',
-        '-vf', `subtitles=${subtitleFile.replace(/\\/g, "/")}:force_style='FontSize=24,Alignment=10'`,
-        '-pix_fmt', 'yuv420p',
-        outputPath
-      ];
+      // Instead of trying to create a video with FFmpeg, we'll use the first scene image
+      // Get the first scene image URL
+      let firstSceneImageUrl = '';
+      let firstSceneDescription = '';
       
-      // Execute FFmpeg command
-      await new Promise<void>((resolve, reject) => {
-        const ffmpeg = spawn('ffmpeg', ffmpegArgs);
-        
-        ffmpeg.stderr.on('data', (data) => {
-          console.log(`FFmpeg: ${data}`);
-        });
-        
-        ffmpeg.on('close', (code) => {
-          if (code === 0) {
-            resolve();
-          } else {
-            reject(new Error(`FFmpeg process exited with code ${code}`));
-          }
-        });
-      });
-      
-      // Create a thumbnail from the first scene
-      try {
-        const firstSceneImageUrl = visuals.scenes[0].imageUrl;
-        const localFirstScenePath = path.resolve(
-          firstSceneImageUrl.startsWith('/') 
-            ? path.join('dist/public', firstSceneImageUrl) 
-            : path.join('dist/public', firstSceneImageUrl)
-        );
-        
-        console.log(`Generating thumbnail from: ${localFirstScenePath}`);
-        
-        await new Promise<void>((resolve, reject) => {
-          const ffmpeg = spawn('ffmpeg', [
-            '-i', localFirstScenePath,
-            '-vf', 'scale=640:-1',
-            thumbnailPath
-          ]);
-          
-          ffmpeg.stderr.on('data', (data) => {
-            console.log(`FFmpeg thumbnail: ${data}`);
-          });
-          
-          ffmpeg.on('close', (code) => {
-            if (code === 0) {
-              resolve();
-            } else {
-              reject(new Error(`FFmpeg thumbnail process exited with code ${code}`));
-            }
-          });
-        });
-      } catch (thumbnailError) {
-        console.error('Error generating thumbnail:', thumbnailError);
-        
-        // Use fallback thumbnail - copy the fallback thumbnail image
-        const fallbackThumbnailPath = path.resolve('dist/public/generated/fallback-thumbnail.svg');
-        await fs.copyFile(fallbackThumbnailPath, thumbnailPath);
-        console.log(`Used fallback thumbnail: ${fallbackThumbnailPath}`);
+      if (visuals.scenes && visuals.scenes.length > 0) {
+        firstSceneImageUrl = visuals.scenes[0].imageUrl;
+        firstSceneDescription = visuals.scenes[0].description;
+      } else {
+        // Use a fallback image
+        firstSceneImageUrl = '/generated/fallback-scene-1.svg';
+        firstSceneDescription = "A day in the life";
       }
       
-      // Use relative URLs
+      // Create a copy of the first scene for the thumbnail
+      const thumbnailImageUrl = firstSceneImageUrl;
+      
+      // Log out the variables so we can debug the issue
+      console.log("Generated video with the following assets:");
+      console.log("First scene image URL:", firstSceneImageUrl);
+      console.log("First scene description:", firstSceneDescription);
+      console.log("Music URL:", music.url);
+      console.log("Characters:", characters.mainCharacterDescription);
+      console.log("Dialogue lines:", dialogue.lines.length);
+      
+      // Use relative URLs for the return values
       return {
-        url: `/generated/${outputFileName}`,
-        thumbnailUrl: `/generated/${thumbnailFileName}`,
-        duration: "60 seconds"
+        url: firstSceneImageUrl, // In this case, we're returning an image instead of a video
+        thumbnailUrl: thumbnailImageUrl,
+        duration: "Image Preview" // Indicate this is just an image
       };
     } catch (error) {
       console.error('Error in video compilation:', error);
       
-      // If FFmpeg fails, provide a fallback that links to the first scene as a static image
-      
-      // Try to get the first scene URL, or use a fallback with relative URL
-      const thumbnailUrl = visuals.scenes && visuals.scenes.length > 0 
-        ? visuals.scenes[0].imageUrl 
-        : `/generated/fallback-thumbnail.svg`;
-      
+      // If any error occurs, use the fallback thumbnail
       return {
-        url: thumbnailUrl, // Just use the thumbnail as fallback
-        thumbnailUrl: thumbnailUrl,
-        duration: "60 seconds"
+        url: `/generated/fallback-thumbnail.svg`,
+        thumbnailUrl: `/generated/fallback-thumbnail.svg`,
+        duration: "Image Preview"
       };
     }
   }
