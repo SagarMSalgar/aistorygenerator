@@ -53,7 +53,7 @@ export const visualAgent = {
       `;
 
       const sceneResponse = await hf.textGeneration({
-        model: 'mistralai/Mistral-7B-Instruct-v0.2',
+        model: 'gpt2',
         inputs: sceneExtractionPrompt,
         parameters: {
           max_new_tokens: 400,

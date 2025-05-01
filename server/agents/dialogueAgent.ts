@@ -35,7 +35,7 @@ export const dialogueAgent = {
       `;
 
       const dialogueResponse = await hf.textGeneration({
-        model: 'mistralai/Mistral-7B-Instruct-v0.2',
+        model: 'gpt2',
         inputs: dialoguePrompt,
         parameters: {
           max_new_tokens: 500,

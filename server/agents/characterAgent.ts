@@ -48,7 +48,7 @@ export const characterAgent = {
       `;
 
       const characterResponse = await hf.textGeneration({
-        model: 'mistralai/Mistral-7B-Instruct-v0.2',
+        model: 'gpt2',
         inputs: characterPrompt,
         parameters: {
           max_new_tokens: 300,

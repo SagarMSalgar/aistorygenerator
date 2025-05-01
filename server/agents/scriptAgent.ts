@@ -32,7 +32,7 @@ export const scriptAgent = {
 
       // Generate script with AI model
       const response = await hf.textGeneration({
-        model: 'mistralai/Mistral-7B-Instruct-v0.2',
+        model: 'gpt2',
         inputs: prompt,
         parameters: {
           max_new_tokens: 500,
@@ -61,7 +61,7 @@ export const scriptAgent = {
         `;
 
         const summaryResponse = await hf.textGeneration({
-          model: 'mistralai/Mistral-7B-Instruct-v0.2',
+          model: 'gpt2',
           inputs: summaryPrompt,
           parameters: {
             max_new_tokens: 150,

@@ -108,7 +108,7 @@ async function createFallbackAssets() {
 async function createDemoProject() {
   try {
     // Check if we already have a demo project
-    const existingProjects = await db.query.schema.projects.findMany({
+    const existingProjects = await db.query.projects.findMany({
       limit: 1
     });
     

@@ -96,7 +96,7 @@ export const musicAgent = {
       `;
 
       const moodResponse = await hf.textGeneration({
-        model: 'mistralai/Mistral-7B-Instruct-v0.2',
+        model: 'gpt2',
         inputs: moodAnalysisPrompt,
         parameters: {
           max_new_tokens: 150,
