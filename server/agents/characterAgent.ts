@@ -130,17 +130,24 @@ export const characterAgent = {
       // Parse character descriptions
       const characterText = characterResponse.generated_text;
       
-      // Extract main character description
-      const mainCharMatch = characterText.match(/Main character:(.+?)(?:Supporting characters:|$)/s);
-      const mainCharDescription = mainCharMatch 
-        ? mainCharMatch[1].trim() 
-        : "A relatable protagonist with an expressive face";
+      // Extract main character description using basic string operations
+      const mainCharStart = characterText.indexOf("Main character:");
+      const supportingStart = characterText.indexOf("Supporting characters:");
       
-      // Extract supporting characters description
-      const supportingMatch = characterText.match(/Supporting characters:(.+?)$/s);
-      const supportingCharactersDescription = supportingMatch 
-        ? supportingMatch[1].trim() 
-        : "Various friends, colleagues, and passersby that interact with the main character";
+      let mainCharDescription = "A relatable protagonist with an expressive face";
+      let supportingCharactersDescription = "Various friends, colleagues, and passersby that interact with the main character";
+      
+      if (mainCharStart >= 0) {
+        if (supportingStart >= 0) {
+          mainCharDescription = characterText.substring(mainCharStart + 15, supportingStart).trim();
+        } else {
+          mainCharDescription = characterText.substring(mainCharStart + 15).trim();
+        }
+      }
+      
+      if (supportingStart >= 0) {
+        supportingCharactersDescription = characterText.substring(supportingStart + 22).trim();
+      }
 
       // Generate main character image using Stability AI
       const mainCharPrompt = `
@@ -151,6 +158,9 @@ export const characterAgent = {
       `;
       
       const negativePrompt = "realistic, photograph, 3d, detailed, ugly, deformed, low quality, low resolution, bad anatomy, worst quality, text, watermark";
+      
+      let mainCharImagePath;
+      let supportingImagePath;
       
       // Try to use Stability AI first
       try {
@@ -164,7 +174,7 @@ export const characterAgent = {
         
         // Save main character image
         const mainCharImageId = nanoid(8);
-        const mainCharImagePath = await saveBinaryImage(
+        mainCharImagePath = await saveBinaryImage(
           mainCharImage,
           `main-char-${mainCharImageId}.png`
         );
@@ -187,68 +197,65 @@ export const characterAgent = {
         
         // Save supporting characters image
         const supportingImageId = nanoid(8);
-        const supportingImagePath = await saveBinaryImage(
+        supportingImagePath = await saveBinaryImage(
           supportingImage,
           `supporting-chars-${supportingImageId}.png`
         );
-        
-        // Return character data with Stability generated images
-        return {
-          mainCharacterUrl: mainCharImagePath,
-          mainCharacterDescription: mainCharDescription,
-          supportingCharactersUrl: supportingImagePath,
-          supportingCharactersDescription: supportingCharactersDescription
-        };
       } catch (stabError) {
         console.error("Stability AI error, falling back to Hugging Face:", stabError);
         
         // Fall back to Hugging Face
-        const mainCharImageResponse = await hf.textToImage({
-          model: "stabilityai/stable-diffusion-2",
-          inputs: mainCharPrompt,
-          parameters: {
-            negative_prompt: "realistic, photograph, 3d, detailed, ugly, deformed, low quality"
-          }
-        });
-        
-        // Save main character image
-        const mainCharImageId = nanoid(8);
-        const mainCharImagePath = await saveBase64Image(
-          Buffer.from(await mainCharImageResponse.arrayBuffer()).toString('base64'),
-          `main-char-${mainCharImageId}.png`
-        );
-        
-        // Generate supporting characters image
-        const supportingPrompt = `
-          Create a cartoon illustration of: ${supportingCharactersDescription}
-          Style: Friendly, modern cartoon with simple lines and vibrant colors
-          Perspective: Group shot showing multiple characters
-          Background: Simple, solid color background
-        `;
-        
-        const supportingImageResponse = await hf.textToImage({
-          model: "stabilityai/stable-diffusion-2",
-          inputs: supportingPrompt,
-          parameters: {
-            negative_prompt: "realistic, photograph, 3d, detailed, ugly, deformed, low quality"
-          }
-        });
-        
-        // Save supporting characters image
-        const supportingImageId = nanoid(8);
-        const supportingImagePath = await saveBase64Image(
-          Buffer.from(await supportingImageResponse.arrayBuffer()).toString('base64'),
-          `supporting-chars-${supportingImageId}.png`
-        );
-
-        // Return the HuggingFace generated images
-        return {
-          mainCharacterUrl: mainCharImagePath,
-          mainCharacterDescription: mainCharDescription,
-          supportingCharactersUrl: supportingImagePath,
-          supportingCharactersDescription: supportingCharactersDescription
-        };
+        try {
+          const mainCharImageResponse = await hf.textToImage({
+            model: "stabilityai/stable-diffusion-2",
+            inputs: mainCharPrompt,
+            parameters: {
+              negative_prompt: "realistic, photograph, 3d, detailed, ugly, deformed, low quality"
+            }
+          });
+          
+          // Save main character image
+          const mainCharImageId = nanoid(8);
+          mainCharImagePath = await saveBase64Image(
+            Buffer.from(await mainCharImageResponse.arrayBuffer()).toString('base64'),
+            `main-char-${mainCharImageId}.png`
+          );
+          
+          // Generate supporting characters image
+          const supportingPrompt = `
+            Create a cartoon illustration of: ${supportingCharactersDescription}
+            Style: Friendly, modern cartoon with simple lines and vibrant colors
+            Perspective: Group shot showing multiple characters
+            Background: Simple, solid color background
+          `;
+          
+          const supportingImageResponse = await hf.textToImage({
+            model: "stabilityai/stable-diffusion-2",
+            inputs: supportingPrompt,
+            parameters: {
+              negative_prompt: "realistic, photograph, 3d, detailed, ugly, deformed, low quality"
+            }
+          });
+          
+          // Save supporting characters image
+          const supportingImageId = nanoid(8);
+          supportingImagePath = await saveBase64Image(
+            Buffer.from(await supportingImageResponse.arrayBuffer()).toString('base64'),
+            `supporting-chars-${supportingImageId}.png`
+          );
+        } catch (hfError) {
+          console.error("Hugging Face error, using fallback:", hfError);
+          throw hfError; // Re-throw to use fallback assets
+        }
       }
+      
+      // Return the character data
+      return {
+        mainCharacterUrl: mainCharImagePath,
+        mainCharacterDescription: mainCharDescription,
+        supportingCharactersUrl: supportingImagePath,
+        supportingCharactersDescription: supportingCharactersDescription
+      };
     } catch (error) {
       console.error('Error in character generation:', error);
       
