@@ -69,50 +69,160 @@ const MUSIC_LIBRARY = [
   }
 ];
 
+// Helper function to analyze script and determine mood and genre
+function analyzeScriptForMusic(script: string): { mood: string, genre: string, explanation: string } {
+  const scriptLower = script.toLowerCase();
+  
+  // Check for mood indicators in the script
+  const moodIndicators = {
+    cheerful: [
+      "happy", "joy", "fun", "laugh", "smile", "bright", "celebration", "party", "excited", "cheer"
+    ],
+    peaceful: [
+      "calm", "quiet", "serene", "peace", "relax", "gentle", "soft", "warm", "comfort", "sooth"
+    ],
+    triumphant: [
+      "achievement", "success", "triumph", "victory", "accomplish", "overcome", "win", "proud", "goal"
+    ],
+    energetic: [
+      "active", "busy", "rush", "run", "fast", "energy", "adventure", "dynamic", "lively", "quick"
+    ],
+    serene: [
+      "nature", "reflect", "meditate", "think", "contemplate", "breathe", "beauty", "appreciate"
+    ],
+    melancholy: [
+      "sad", "miss", "regret", "lonely", "nostalgia", "remember", "past", "lost", "wish"
+    ]
+  };
+  
+  // Count occurrences of mood indicators
+  const moodCounts = Object.fromEntries(
+    Object.entries(moodIndicators).map(([mood, indicators]) => [
+      mood, 
+      indicators.filter(word => scriptLower.includes(word)).length
+    ])
+  );
+  
+  // Find the predominant mood
+  const entries = Object.entries(moodCounts);
+  entries.sort((a, b) => b[1] - a[1]);
+  const primaryMood = entries[0][1] > 0 ? entries[0][0] : "cheerful"; // default to cheerful
+  
+  // Determine appropriate genre based on mood
+  let genre = "Upbeat";
+  let explanation = "";
+  
+  switch (primaryMood) {
+    case "cheerful":
+      genre = "Pop";
+      explanation = "The script has a positive, uplifting tone that calls for cheerful background music.";
+      break;
+    case "peaceful":
+      genre = "Ambient";
+      explanation = "The calm, reflective nature of the script suggests peaceful, ambient music.";
+      break;
+    case "triumphant":
+      genre = "Cinematic";
+      explanation = "The script's focus on achievement and success calls for triumphant music.";
+      break;
+    case "energetic":
+      genre = "Electronic";
+      explanation = "The dynamic, fast-paced elements of the script are best complemented by energetic music.";
+      break;
+    case "serene":
+      genre = "Classical";
+      explanation = "The contemplative, appreciative qualities of the script pair well with serene classical music.";
+      break;
+    case "melancholy":
+      genre = "Acoustic";
+      explanation = "The emotional depth and reflection in the script calls for thoughtful acoustic music.";
+      break;
+  }
+  
+  // Capitalize first letter of mood
+  const mood = primaryMood.charAt(0).toUpperCase() + primaryMood.slice(1);
+  
+  return { mood, genre, explanation };
+}
+
 export const musicAgent = {
   /**
    * Selects appropriate music for the cartoon based on the script
    */
   async selectMusic(script: string) {
     try {
-      // Analyze script to determine the appropriate music mood
-      const moodAnalysisPrompt = `
-        Analyze this script for a short animated cartoon:
-        "${script}"
-        
-        What is the overall mood and tone of this story? Choose one primary mood from:
-        - Cheerful
-        - Peaceful
-        - Triumphant
-        - Energetic
-        - Serene
-        
-        Also suggest a music genre that would fit well with this cartoon.
-        
-        Format:
-        Mood: [mood]
-        Genre: [genre]
-        Explanation: [brief explanation]
-      `;
+      // First try to use AI for music analysis
+      let mood = "";
+      let genre = "";
+      
+      try {
+        // Analyze script to determine the appropriate music mood
+        const moodAnalysisPrompt = `
+          Analyze this script for a short animated cartoon:
+          "${script}"
+          
+          What is the overall mood and tone of this story? Choose one primary mood from:
+          - Cheerful
+          - Peaceful
+          - Triumphant
+          - Energetic
+          - Serene
+          
+          Also suggest a music genre that would fit well with this cartoon.
+          
+          Format:
+          Mood: [mood]
+          Genre: [genre]
+          Explanation: [brief explanation]
+        `;
 
-      const moodResponse = await hf.textGeneration({
-        model: 'gpt2',
-        inputs: moodAnalysisPrompt,
-        parameters: {
-          max_new_tokens: 150,
-          temperature: 0.5
+        // Try a better model
+        const moodResponse = await hf.textGeneration({
+          model: 'mistralai/Mistral-7B-Instruct-v0.2',
+          inputs: moodAnalysisPrompt,
+          parameters: {
+            max_new_tokens: 150,
+            temperature: 0.5
+          }
+        });
+
+        const moodText = moodResponse.generated_text;
+        
+        // Extract mood
+        const moodMatch = moodText.match(/Mood:\s*(\w+)/i);
+        if (moodMatch && moodMatch[1]) {
+          mood = moodMatch[1];
+        } else {
+          throw new Error("Could not extract mood from AI response");
         }
-      });
-
-      const moodText = moodResponse.generated_text;
+        
+        // Extract genre
+        const genreMatch = moodText.match(/Genre:\s*(\w+)/i);
+        if (genreMatch && genreMatch[1]) {
+          genre = genreMatch[1];
+        } else {
+          throw new Error("Could not extract genre from AI response");
+        }
+      } catch (aiError) {
+        console.log("Error getting mood from AI, using script analysis:", aiError);
+        // Use our script analysis function as fallback
+        const analysis = analyzeScriptForMusic(script);
+        mood = analysis.mood;
+        genre = analysis.genre;
+      }
       
-      // Extract mood
-      const moodMatch = moodText.match(/Mood:\s*(\w+)/i);
-      const mood = moodMatch ? moodMatch[1] : "Cheerful";
+      // Make sure we have valid values
+      if (!mood || mood.length < 3) {
+        const analysis = analyzeScriptForMusic(script);
+        mood = analysis.mood;
+      }
       
-      // Extract genre
-      const genreMatch = moodText.match(/Genre:\s*(\w+)/i);
-      const genre = genreMatch ? genreMatch[1] : "Upbeat";
+      if (!genre || genre.length < 3) {
+        const analysis = analyzeScriptForMusic(script);
+        genre = analysis.genre;
+      }
+      
+      console.log(`Selected music mood: ${mood}, genre: ${genre} for script`);
       
       // Select music based on mood
       let selectedMusic = MUSIC_LIBRARY.find(music => 
@@ -159,7 +269,39 @@ export const musicAgent = {
     } catch (error) {
       console.error('Error in music selection:', error);
       
-      // Fallback music in case of API failure - using relative URLs
+      // Use script analysis for fallback
+      const analysis = analyzeScriptForMusic(script);
+      
+      // Select fallback music based on mood analysis
+      let fallbackTrack = MUSIC_LIBRARY.find(music => 
+        music.mood.toLowerCase() === analysis.mood.toLowerCase() || 
+        music.genre.toLowerCase() === analysis.genre.toLowerCase()
+      ) || MUSIC_LIBRARY[0];
+      
+      // Try to download the selected track
+      try {
+        const response = await fetch(fallbackTrack.source);
+        if (response.ok) {
+          const audioBuffer = await response.buffer();
+          const audioId = nanoid(8);
+          const audioPath = await saveAudioFile(audioBuffer, `music-${audioId}.mp3`);
+          const previewPath = await saveAudioFile(audioBuffer, `music-preview-${audioId}.mp3`);
+          
+          return {
+            title: fallbackTrack.title,
+            artist: fallbackTrack.artist,
+            genre: fallbackTrack.genre,
+            mood: fallbackTrack.mood,
+            license: fallbackTrack.license,
+            url: `${audioPath}`,
+            previewUrl: `${previewPath}`
+          };
+        }
+      } catch (downloadError) {
+        console.error('Error downloading fallback track, using static fallback:', downloadError);
+      }
+      
+      // Last resort fallback - static file
       return {
         title: "Cheerful Journey",
         artist: "Open Source Audio",
