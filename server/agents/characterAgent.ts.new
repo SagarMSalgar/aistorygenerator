@@ -1,0 +1,399 @@
+import { HfInference } from '@huggingface/inference';
+import { nanoid } from 'nanoid';
+import fs from 'fs/promises';
+import path from 'path';
+import fetch from 'node-fetch';
+
+// Initialize Hugging Face client
+const hf = new HfInference(process.env.HUGGINGFACE_API_KEY || "");
+
+// Stability API key for direct API calls
+const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
+const STABILITY_API_HOST = 'https://api.stability.ai';
+
+// Function to save base64 image
+async function saveBase64Image(base64String: string, fileName: string): Promise<string> {
+  try {
+    // Remove data:image/jpeg;base64, part if present
+    const base64Data = base64String.replace(/^data:image\/\w+;base64,/, "");
+    
+    // Create directory if it doesn't exist
+    const outputDir = path.resolve('dist/public/generated');
+    await fs.mkdir(outputDir, { recursive: true });
+    
+    const filePath = path.join(outputDir, fileName);
+    await fs.writeFile(filePath, base64Data, { encoding: 'base64' });
+    
+    // Return the public URL
+    return `/generated/${fileName}`;
+  } catch (error) {
+    console.error('Error saving image:', error);
+    throw error;
+  }
+}
+
+// Function to save binary image
+async function saveBinaryImage(imageBuffer: Buffer, fileName: string): Promise<string> {
+  try {
+    // Create directory if it doesn't exist
+    const outputDir = path.resolve('dist/public/generated');
+    await fs.mkdir(outputDir, { recursive: true });
+    
+    const filePath = path.join(outputDir, fileName);
+    await fs.writeFile(filePath, imageBuffer);
+    
+    // Return the public URL
+    return `/generated/${fileName}`;
+  } catch (error) {
+    console.error('Error saving binary image:', error);
+    throw error;
+  }
+}
+
+// Function to generate an image with Stability AI
+async function generateStabilityImage(prompt: string, negativePrompt: string = ""): Promise<Buffer> {
+  if (!STABILITY_API_KEY) {
+    throw new Error('STABILITY_API_KEY is not set');
+  }
+  
+  const response = await fetch(
+    `${STABILITY_API_HOST}/v1/generation/stable-diffusion-xl-beta-v2-2-2/text-to-image`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${STABILITY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        text_prompts: [
+          {
+            text: prompt,
+            weight: 1,
+          },
+          {
+            text: negativePrompt,
+            weight: -1,
+          },
+        ],
+        cfg_scale: 7.0,
+        height: 1024,
+        width: 1024,
+        steps: 30,
+        samples: 1,
+        style_preset: "animation",
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Stability API error: ${response.statusText}`);
+  }
+
+  const responseJSON = await response.json() as { artifacts: Array<{ base64: string }> };
+  const base64Image = responseJSON.artifacts[0].base64;
+  return Buffer.from(base64Image, 'base64');
+}
+
+// Helper function to extract character information from script
+function analyzeScriptForCharacters(script: string) {
+  // Extract information from script to create character descriptions
+  const topics = [];
+  const traits = [];
+  
+  // Detect character traits and topics
+  if (script.toLowerCase().includes('work') || script.toLowerCase().includes('office')) {
+    topics.push('professional');
+    traits.push('organized', 'determined');
+  }
+  
+  if (script.toLowerCase().includes('friend') || script.toLowerCase().includes('social')) {
+    topics.push('friendly');
+    traits.push('outgoing', 'caring');
+  }
+  
+  if (script.toLowerCase().includes('creative') || script.toLowerCase().includes('art') || 
+      script.toLowerCase().includes('music') || script.toLowerCase().includes('write')) {
+    topics.push('artistic');
+    traits.push('creative', 'expressive');
+  }
+  
+  if (script.toLowerCase().includes('sport') || script.toLowerCase().includes('gym') || 
+      script.toLowerCase().includes('fit') || script.toLowerCase().includes('run')) {
+    topics.push('athletic');
+    traits.push('energetic', 'fit');
+  }
+  
+  if (script.toLowerCase().includes('study') || script.toLowerCase().includes('school') || 
+      script.toLowerCase().includes('learn') || script.toLowerCase().includes('book')) {
+    topics.push('academic');
+    traits.push('thoughtful', 'curious');
+  }
+  
+  if (script.toLowerCase().includes('family') || script.toLowerCase().includes('parent') || 
+      script.toLowerCase().includes('child') || script.toLowerCase().includes('kid')) {
+    topics.push('family-oriented');
+    traits.push('nurturing', 'patient');
+  }
+  
+  if (script.toLowerCase().includes('adventure') || script.toLowerCase().includes('travel') || 
+      script.toLowerCase().includes('explore')) {
+    topics.push('adventurous');
+    traits.push('bold', 'curious');
+  }
+  
+  // Add some default topics and traits if none were found
+  if (topics.length === 0) {
+    topics.push('everyday person', 'relatable character');
+  }
+  
+  if (traits.length === 0) {
+    traits.push('friendly', 'thoughtful', 'optimistic');
+  }
+  
+  // Randomly select some topics and traits to create variety
+  const selectedTopics = shuffle(topics).slice(0, Math.min(2, topics.length));
+  const selectedTraits = shuffle(traits).slice(0, Math.min(3, traits.length));
+  
+  // Generate physical descriptions
+  const physicalFeatures = [
+    'has medium-length hair',
+    'wears casual, comfortable clothes',
+    'has an expressive face with bright eyes',
+    'has a friendly smile',
+    'is average height with a relaxed posture',
+    'has a distinctive style that reflects their personality'
+  ];
+  
+  const selectedFeatures = shuffle(physicalFeatures).slice(0, 2);
+  
+  // Create main character description
+  const mainCharacterDescription = `A ${selectedTraits.join(', ')} ${selectedTopics.join(', ')} who ${selectedFeatures.join(' and ')}`;
+  
+  // Create supporting characters
+  const supportingRoles = [
+    'friends',
+    'family members',
+    'colleagues',
+    'neighbors',
+    'acquaintances'
+  ];
+  
+  const supportingTraits = [
+    'diverse',
+    'colorful',
+    'distinctive',
+    'complementary',
+    'contrasting'
+  ];
+  
+  const selectedSupportingRoles = shuffle(supportingRoles).slice(0, 2);
+  const selectedSupportingTraits = shuffle(supportingTraits).slice(0, 2);
+  
+  const supportingCharactersDescription = `A group of ${selectedSupportingTraits.join(', ')} ${selectedSupportingRoles.join(' and ')} who each have unique appearances that contrast with the main character`;
+  
+  return {
+    mainCharacterDescription,
+    supportingCharactersDescription
+  };
+}
+
+// Fisher-Yates shuffle algorithm
+function shuffle(array: any[]) {
+  const newArray = [...array];
+  for (let i = newArray.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [newArray[i], newArray[j]] = [newArray[j], newArray[i]];
+  }
+  return newArray;
+}
+
+export const characterAgent = {
+  /**
+   * Generates cartoon character designs based on the script
+   */
+  async generateCharacters(script: string) {
+    try {
+      // First try to extract character descriptions using external AI
+      let mainCharacterDescription = "";
+      let supportingCharactersDescription = "";
+      
+      try {
+        // Try using a more appropriate model
+        const characterPrompt = `
+          Based on this script:
+          "${script}"
+          
+          Extract a detailed description of:
+          1. The main character (appearance, personality, style)
+          2. Any supporting characters (appearance, personality, style)
+          
+          Format as:
+          Main character: [description]
+          Supporting characters: [description]
+        `;
+
+        // Try with a better model than gpt2
+        const characterResponse = await hf.textGeneration({
+          model: 'mistralai/Mistral-7B-Instruct-v0.2',
+          inputs: characterPrompt,
+          parameters: {
+            max_new_tokens: 250,
+            temperature: 0.7
+          }
+        });
+
+        // Parse character descriptions from the response
+        const characterText = characterResponse.generated_text;
+        
+        // Extract main character description
+        const mainMatch = characterText.match(/Main character:(.+?)(?=Supporting characters:|$)/s);
+        if (mainMatch && mainMatch[1] && mainMatch[1].trim().length > 10) {
+          mainCharacterDescription = mainMatch[1].trim();
+        } else {
+          throw new Error("Invalid main character description from AI");
+        }
+        
+        // Extract supporting characters description
+        const supportingMatch = characterText.match(/Supporting characters:(.+?)$/s);
+        if (supportingMatch && supportingMatch[1] && supportingMatch[1].trim().length > 10) {
+          supportingCharactersDescription = supportingMatch[1].trim();
+        } else {
+          throw new Error("Invalid supporting characters description from AI");
+        }
+      } catch (descriptionError) {
+        console.log("Error generating character descriptions with AI:", descriptionError);
+        
+        // If the AI description fails, use our script analysis function
+        const scriptAnalysis = analyzeScriptForCharacters(script);
+        mainCharacterDescription = scriptAnalysis.mainCharacterDescription;
+        supportingCharactersDescription = scriptAnalysis.supportingCharactersDescription;
+      }
+      
+      console.log("Generating main character image...");
+      console.log("Main character description:", mainCharacterDescription);
+      
+      // Generate main character image
+      let mainCharacterUrl;
+      try {
+        if (STABILITY_API_KEY) {
+          // Try using Stability AI for better image generation
+          const mainCharacterImagePrompt = `
+            Cartoon style illustration, friendly, appealing character, highly detailed, 
+            ${mainCharacterDescription}, 
+            clean lines, vibrant colors, white background, animation style
+          `;
+          
+          const mainCharacterImage = await generateStabilityImage(
+            mainCharacterImagePrompt, 
+            "ugly, deformed, distorted, disfigured, low quality, blurry"
+          );
+          
+          const mainCharacterFileName = `character-main-${nanoid(6)}.png`;
+          mainCharacterUrl = await saveBinaryImage(mainCharacterImage, mainCharacterFileName);
+          console.log("Generated main character image with Stability AI");
+        } else {
+          throw new Error("No Stability API key available, falling back to Hugging Face");
+        }
+      } catch (mainImageError) {
+        console.error("Error generating main character image with Stability:", mainImageError);
+        
+        try {
+          // Fall back to Hugging Face for image generation
+          const mainCharacterImagePrompt = `
+            cartoon character, ${mainCharacterDescription}, simple style, clean design, white background
+          `;
+          
+          const mainCharacterImage = await hf.textToImage({
+            inputs: mainCharacterImagePrompt,
+            model: "stabilityai/stable-diffusion-2",
+            parameters: {
+              negative_prompt: "ugly, deformed, distorted, disfigured, low quality, blurry",
+            }
+          });
+          
+          // Convert to base64
+          const mainCharacterBase64 = Buffer.from(await mainCharacterImage.arrayBuffer()).toString('base64');
+          const mainCharacterFileName = `character-main-${nanoid(6)}.png`;
+          mainCharacterUrl = await saveBase64Image(mainCharacterBase64, mainCharacterFileName);
+          console.log("Generated main character image with Hugging Face");
+        } catch (fallbackError) {
+          console.error("Error generating main character image with Hugging Face:", fallbackError);
+          // Use a fallback SVG image
+          mainCharacterUrl = "/generated/fallback-character-main.svg";
+        }
+      }
+      
+      console.log("Generating supporting characters image...");
+      console.log("Supporting characters description:", supportingCharactersDescription);
+      
+      // Generate supporting characters image
+      let supportingCharactersUrl;
+      try {
+        if (STABILITY_API_KEY) {
+          // Try using Stability AI for better image generation
+          const supportingCharacterImagePrompt = `
+            Cartoon style group of supporting characters, friendly, appealing, highly detailed, 
+            ${supportingCharactersDescription}, 
+            clean lines, vibrant colors, white background, animation style
+          `;
+          
+          const supportingCharacterImage = await generateStabilityImage(
+            supportingCharacterImagePrompt, 
+            "ugly, deformed, distorted, disfigured, low quality, blurry"
+          );
+          
+          const supportingCharacterFileName = `character-supporting-${nanoid(6)}.png`;
+          supportingCharactersUrl = await saveBinaryImage(supportingCharacterImage, supportingCharacterFileName);
+          console.log("Generated supporting characters image with Stability AI");
+        } else {
+          throw new Error("No Stability API key available, falling back to Hugging Face");
+        }
+      } catch (supportingImageError) {
+        console.error("Error generating supporting characters image with Stability:", supportingImageError);
+        
+        try {
+          // Fall back to Hugging Face for image generation
+          const supportingCharacterImagePrompt = `
+            cartoon group of characters, ${supportingCharactersDescription}, simple style, clean design, white background
+          `;
+          
+          const supportingCharacterImage = await hf.textToImage({
+            inputs: supportingCharacterImagePrompt,
+            model: "stabilityai/stable-diffusion-2",
+            parameters: {
+              negative_prompt: "ugly, deformed, distorted, disfigured, low quality, blurry",
+            }
+          });
+          
+          // Convert to base64
+          const supportingCharacterBase64 = Buffer.from(await supportingCharacterImage.arrayBuffer()).toString('base64');
+          const supportingCharacterFileName = `character-supporting-${nanoid(6)}.png`;
+          supportingCharactersUrl = await saveBase64Image(supportingCharacterBase64, supportingCharacterFileName);
+          console.log("Generated supporting characters image with Hugging Face");
+        } catch (fallbackError) {
+          console.error("Error generating supporting characters image with Hugging Face:", fallbackError);
+          // Use a fallback SVG image
+          supportingCharactersUrl = "/generated/fallback-character-supporting.svg";
+        }
+      }
+      
+      return {
+        mainCharacterUrl,
+        mainCharacterDescription,
+        supportingCharactersUrl,
+        supportingCharactersDescription
+      };
+    } catch (error) {
+      console.error('Error in character generation:', error);
+      
+      // Return fallback character data
+      return {
+        mainCharacterUrl: "/generated/fallback-character-main.svg",
+        mainCharacterDescription: "A friendly protagonist with an optimistic outlook on life.",
+        supportingCharactersUrl: "/generated/fallback-character-supporting.svg",
+        supportingCharactersDescription: "Friends and family who provide support and occasional comic relief."
+      };
+    }
+  }
+};
