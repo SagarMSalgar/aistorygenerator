@@ -131,28 +131,21 @@ export const videoAgent = {
         });
       });
       
-      // Prepare domain for complete URLs
-      const domain = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-        : 'http://localhost:5000';
-      
+      // Use relative URLs
       return {
-        url: `${domain}/generated/${outputFileName}`,
-        thumbnailUrl: `${domain}/generated/${thumbnailFileName}`,
+        url: `/generated/${outputFileName}`,
+        thumbnailUrl: `/generated/${thumbnailFileName}`,
         duration: "60 seconds"
       };
     } catch (error) {
       console.error('Error in video compilation:', error);
       
       // If FFmpeg fails, provide a fallback that links to the first scene as a static image
-      const domain = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-        : 'http://localhost:5000';
       
-      // Try to get the first scene URL, or use a fallback
+      // Try to get the first scene URL, or use a fallback with relative URL
       const thumbnailUrl = visuals.scenes && visuals.scenes.length > 0 
         ? visuals.scenes[0].imageUrl 
-        : `${domain}/generated/fallback-thumbnail.svg`;
+        : `/generated/fallback-thumbnail.svg`;
       
       return {
         url: thumbnailUrl, // Just use the thumbnail as fallback
