@@ -3,9 +3,14 @@ import { nanoid } from 'nanoid';
 import fs from 'fs/promises';
 import path from 'path';
 import { SceneData } from '@shared/schema';
+import fetch from 'node-fetch';
 
 // Initialize Hugging Face client
 const hf = new HfInference(process.env.HUGGINGFACE_API_KEY || "");
+
+// Stability API key for direct API calls
+const STABILITY_API_KEY = process.env.STABILITY_API_KEY;
+const STABILITY_API_HOST = 'https://api.stability.ai';
 
 // Function to save base64 image
 async function saveBase64Image(base64String: string, fileName: string): Promise<string> {
@@ -26,6 +31,72 @@ async function saveBase64Image(base64String: string, fileName: string): Promise<
     console.error('Error saving image:', error);
     throw error;
   }
+}
+
+// Function to save binary image
+async function saveBinaryImage(imageBuffer: Buffer, fileName: string): Promise<string> {
+  try {
+    // Create directory if it doesn't exist
+    const outputDir = path.resolve('dist/public/generated');
+    await fs.mkdir(outputDir, { recursive: true });
+    
+    const filePath = path.join(outputDir, fileName);
+    await fs.writeFile(filePath, imageBuffer);
+    
+    // Return the public URL
+    return `/generated/${fileName}`;
+  } catch (error) {
+    console.error('Error saving binary image:', error);
+    throw error;
+  }
+}
+
+// Function to generate an image using Stability AI
+async function generateStabilityImage(prompt: string, negativePrompt: string = ""): Promise<Buffer> {
+  if (!STABILITY_API_KEY) {
+    throw new Error("Missing Stability API key");
+  }
+
+  const engineId = "stable-diffusion-xl-1024-v1-0";
+  const apiHost = STABILITY_API_HOST;
+
+  const response = await fetch(
+    `${apiHost}/v1/generation/${engineId}/text-to-image`,
+    {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Accept: 'application/json',
+        Authorization: `Bearer ${STABILITY_API_KEY}`,
+      },
+      body: JSON.stringify({
+        text_prompts: [
+          {
+            text: prompt,
+            weight: 1.0,
+          },
+          {
+            text: negativePrompt,
+            weight: -1.0,
+          },
+        ],
+        cfg_scale: 7.0,
+        height: 1024,
+        width: 1024,
+        steps: 30,
+        samples: 1,
+        style_preset: "animation",
+      }),
+    }
+  );
+
+  if (!response.ok) {
+    throw new Error(`Stability API error: ${response.statusText}`);
+  }
+
+  const responseJSON = await response.json() as { artifacts: Array<{ base64: string }> };
+  const base64Image = responseJSON.artifacts[0].base64;
+  return Buffer.from(base64Image, 'base64');
 }
 
 export const visualAgent = {
@@ -90,41 +161,90 @@ export const visualAgent = {
       // Generate visuals for each scene
       const scenes: SceneData[] = [];
       const characterStyle = "cartoon style, simple, colorful, clean lines";
+      const negativePrompt = "realistic, photograph, 3d, detailed, ugly, deformed, low quality, low resolution, bad anatomy, worst quality, text, watermark";
       
-      for (let i = 0; i < sceneDescriptions.length; i++) {
-        const scenePrompt = `
-          Create a cartoon scene:
-          ${sceneDescriptions[i]}
+      // Try to use Stability AI first
+      try {
+        console.log("Generating scene images with Stability AI...");
+        
+        for (let i = 0; i < sceneDescriptions.length; i++) {
+          const scenePrompt = `
+            Create a cartoon scene:
+            ${sceneDescriptions[i]}
+            
+            Character design:
+            ${characters.mainCharacterDescription}
+            
+            Style: ${characterStyle}
+            Mood: Positive, uplifting
+            Perspective: Wide shot showing the environment and characters
+            Background: Detailed but not overwhelming
+          `;
           
-          Character design:
-          ${characters.mainCharacterDescription}
+          // Generate scene image with Stability AI
+          console.log(`Generating scene ${i+1} with Stability AI...`);
+          const sceneImage = await generateStabilityImage(
+            scenePrompt,
+            negativePrompt
+          );
           
-          Style: ${characterStyle}
-          Mood: Positive, uplifting
-          Perspective: Wide shot showing the environment and characters
-          Background: Detailed but not overwhelming
-        `;
-
-        const imageResponse = await hf.textToImage({
-          model: "stabilityai/stable-diffusion-2",
-          inputs: scenePrompt,
-          parameters: {
-            negative_prompt: "realistic, photograph, 3d, detailed, ugly, deformed, low quality, text, watermark"
-          }
-        });
-
-        // Save scene image
-        const sceneImageId = nanoid(8);
-        const sceneImagePath = await saveBase64Image(
-          Buffer.from(await imageResponse.arrayBuffer()).toString('base64'),
-          `scene-${i+1}-${sceneImageId}.png`
-        );
-
-        // Use relative URLs
-        scenes.push({
-          imageUrl: `${sceneImagePath}`,
-          description: sceneDescriptions[i]
-        });
+          // Save scene image
+          const sceneImageId = nanoid(8);
+          const sceneImagePath = await saveBinaryImage(
+            sceneImage,
+            `scene-${i+1}-${sceneImageId}.png`
+          );
+          
+          // Add scene to collection
+          scenes.push({
+            imageUrl: sceneImagePath,
+            description: sceneDescriptions[i]
+          });
+        }
+        
+        return { scenes };
+      } catch (stabError) {
+        console.error("Stability AI error, falling back to Hugging Face:", stabError);
+        
+        // Clear scenes array to start fresh with Hugging Face
+        scenes.length = 0;
+        
+        // Fall back to Hugging Face for scene generation
+        for (let i = 0; i < sceneDescriptions.length; i++) {
+          const scenePrompt = `
+            Create a cartoon scene:
+            ${sceneDescriptions[i]}
+            
+            Character design:
+            ${characters.mainCharacterDescription}
+            
+            Style: ${characterStyle}
+            Mood: Positive, uplifting
+            Perspective: Wide shot showing the environment and characters
+            Background: Detailed but not overwhelming
+          `;
+          
+          const imageResponse = await hf.textToImage({
+            model: "stabilityai/stable-diffusion-2",
+            inputs: scenePrompt,
+            parameters: {
+              negative_prompt: "realistic, photograph, 3d, detailed, ugly, deformed, low quality, text, watermark"
+            }
+          });
+          
+          // Save scene image
+          const sceneImageId = nanoid(8);
+          const sceneImagePath = await saveBase64Image(
+            Buffer.from(await imageResponse.arrayBuffer()).toString('base64'),
+            `scene-${i+1}-${sceneImageId}.png`
+          );
+          
+          // Add scene to collection
+          scenes.push({
+            imageUrl: sceneImagePath,
+            description: sceneDescriptions[i]
+          });
+        }
       }
 
       return { scenes };
