@@ -120,13 +120,9 @@ export const visualAgent = {
           `scene-${i+1}-${sceneImageId}.png`
         );
 
-        // Prepare domain for complete URLs
-        const domain = process.env.REPLIT_DOMAINS 
-          ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-          : 'http://localhost:5000';
-
+        // Use relative URLs
         scenes.push({
-          imageUrl: `${domain}${sceneImagePath}`,
+          imageUrl: `${sceneImagePath}`,
           description: sceneDescriptions[i]
         });
       }
@@ -135,27 +131,23 @@ export const visualAgent = {
     } catch (error) {
       console.error('Error in visual generation:', error);
       
-      // Fallback visuals in case of API failure
-      const domain = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-        : 'http://localhost:5000';
-        
+      // Fallback visuals in case of API failure - using relative URLs
       return {
         scenes: [
           {
-            imageUrl: `${domain}/generated/fallback-scene-1.svg`,
+            imageUrl: `/generated/fallback-scene-1.svg`,
             description: "Morning scene with the main character waking up and starting their day."
           },
           {
-            imageUrl: `${domain}/generated/fallback-scene-2.svg`,
+            imageUrl: `/generated/fallback-scene-2.svg`,
             description: "Office or work environment with the main character interacting with colleagues."
           },
           {
-            imageUrl: `${domain}/generated/fallback-scene-3.svg`,
+            imageUrl: `/generated/fallback-scene-3.svg`,
             description: "Park scene with the main character observing dogs playing and people enjoying nature."
           },
           {
-            imageUrl: `${domain}/generated/fallback-scene-4.svg`,
+            imageUrl: `/generated/fallback-scene-4.svg`,
             description: "Evening reflection scene with the main character feeling content about their day."
           }
         ]

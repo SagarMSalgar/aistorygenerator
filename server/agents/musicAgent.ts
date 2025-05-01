@@ -146,36 +146,28 @@ export const musicAgent = {
         `music-preview-${audioId}.mp3`
       );
       
-      // Prepare domain for complete URLs
-      const domain = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-        : 'http://localhost:5000';
-      
+      // Use relative URLs
       return {
         title: selectedMusic.title,
         artist: selectedMusic.artist,
         genre: selectedMusic.genre,
         mood: selectedMusic.mood,
         license: selectedMusic.license,
-        url: `${domain}${audioPath}`,
-        previewUrl: `${domain}${previewPath}`
+        url: `${audioPath}`,
+        previewUrl: `${previewPath}`
       };
     } catch (error) {
       console.error('Error in music selection:', error);
       
-      // Fallback music in case of API failure
-      const domain = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-        : 'http://localhost:5000';
-        
+      // Fallback music in case of API failure - using relative URLs
       return {
         title: "Cheerful Journey",
         artist: "Open Source Audio",
         genre: "Upbeat",
         mood: "Positive",
         license: "Creative Commons Zero",
-        url: `${domain}/generated/fallback-music.mp3`,
-        previewUrl: `${domain}/generated/fallback-music-preview.mp3`
+        url: `/generated/fallback-music.mp3`,
+        previewUrl: `/generated/fallback-music-preview.mp3`
       };
     }
   }

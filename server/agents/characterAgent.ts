@@ -120,26 +120,22 @@ export const characterAgent = {
       // Prepare domain for complete URLs
       const domain = process.env.REPLIT_DOMAINS 
         ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-        : 'http://localhost:5000';
+        : '';
 
       return {
-        mainCharacterUrl: `${domain}${mainCharImagePath}`,
+        mainCharacterUrl: `${mainCharImagePath}`, // Remove domain to make relative URL
         mainCharacterDescription: mainCharDescription,
-        supportingCharactersUrl: `${domain}${supportingImagePath}`,
+        supportingCharactersUrl: `${supportingImagePath}`, // Remove domain to make relative URL
         supportingCharactersDescription: supportingCharactersDescription
       };
     } catch (error) {
       console.error('Error in character generation:', error);
       
-      // Fallback values in case of API failure
-      const domain = process.env.REPLIT_DOMAINS 
-        ? `https://${process.env.REPLIT_DOMAINS.split(',')[0]}` 
-        : 'http://localhost:5000';
-        
+      // Fallback values in case of API failure with relative URLs
       return {
-        mainCharacterUrl: `${domain}/generated/fallback-main-character.svg`,
+        mainCharacterUrl: `/generated/fallback-main-character.svg`,
         mainCharacterDescription: "A relatable protagonist with an expressive face",
-        supportingCharactersUrl: `${domain}/generated/fallback-supporting-characters.svg`,
+        supportingCharactersUrl: `/generated/fallback-supporting-characters.svg`,
         supportingCharactersDescription: "Various friends, colleagues, and passersby that interact with the main character"
       };
     }

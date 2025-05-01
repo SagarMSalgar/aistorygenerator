@@ -67,36 +67,37 @@ async function createFallbackAssets() {
   ];
 
   try {
-    // Create dist/public/generated directory if it doesn't exist
-    const fs = require('fs');
-    const path = require('path');
+    // Using native fs/promises instead of require
+    import fs from 'fs/promises';
+    import path from 'path';
+    
     const generatedDir = path.resolve('dist/public/generated');
     
-    if (!fs.existsSync('dist')) {
-      fs.mkdirSync('dist');
-    }
-    if (!fs.existsSync('dist/public')) {
-      fs.mkdirSync('dist/public');
-    }
-    if (!fs.existsSync(generatedDir)) {
-      fs.mkdirSync(generatedDir);
+    // Create directories if they don't exist
+    try {
+      await fs.mkdir('dist', { recursive: true });
+      await fs.mkdir('dist/public', { recursive: true });
+      await fs.mkdir(generatedDir, { recursive: true });
+    } catch (err) {
+      // Directory might already exist, which is fine
+      console.log('Note: Some directories may already exist');
     }
 
     // Write main character SVG
-    fs.writeFileSync(path.join(generatedDir, 'fallback-main-character.svg'), mainCharSvg);
+    await fs.writeFile(path.join(generatedDir, 'fallback-main-character.svg'), mainCharSvg);
     
     // Write supporting characters SVG
-    fs.writeFileSync(path.join(generatedDir, 'fallback-supporting-characters.svg'), supportingCharsSvg);
+    await fs.writeFile(path.join(generatedDir, 'fallback-supporting-characters.svg'), supportingCharsSvg);
     
     // Write scene SVGs
-    sceneSvgs.forEach((svg, index) => {
-      fs.writeFileSync(path.join(generatedDir, `fallback-scene-${index + 1}.svg`), svg);
-    });
+    for (let i = 0; i < sceneSvgs.length; i++) {
+      await fs.writeFile(path.join(generatedDir, `fallback-scene-${i + 1}.svg`), sceneSvgs[i]);
+    }
     
-    // Create an empty audio file for fallback
-    fs.writeFileSync(path.join(generatedDir, 'fallback-music.mp3'), '');
-    fs.writeFileSync(path.join(generatedDir, 'fallback-music-preview.mp3'), '');
-    fs.writeFileSync(path.join(generatedDir, 'fallback-thumbnail.svg'), sceneSvgs[0]);
+    // Create empty audio files for fallback
+    await fs.writeFile(path.join(generatedDir, 'fallback-music.mp3'), '');
+    await fs.writeFile(path.join(generatedDir, 'fallback-music-preview.mp3'), '');
+    await fs.writeFile(path.join(generatedDir, 'fallback-thumbnail.svg'), sceneSvgs[0]);
     
     console.log('Created fallback assets successfully');
   } catch (error) {
