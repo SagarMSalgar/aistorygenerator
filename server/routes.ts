@@ -343,6 +343,8 @@ export async function registerRoutes(app: Express): Promise<Server> {
       res.setHeader('Content-Type', 'audio/mpeg');
     } else if (filename.endsWith('.mp4')) {
       res.setHeader('Content-Type', 'video/mp4');
+    } else if (filename.endsWith('.json')) {
+      res.setHeader('Content-Type', 'application/json');
     }
     
     // Send the file

@@ -1,42 +1,81 @@
-import { useCartoon } from "@/context/CartoonContext";
-import { Button } from "@/components/ui/button";
+import { useState, useEffect } from 'react';
+import { Button } from './ui/button';
+import { useCartoon } from '@/context/CartoonContext';
+import AnimatedScenesPlayer from './AnimatedScenesPlayer';
 
 export default function PreviewPanel() {
-  const { 
-    script, 
-    characters, 
-    dialogue, 
-    visuals, 
-    music, 
+  const {
+    script,
+    characters,
+    dialogue,
+    visuals,
     finalVideo,
     saveProject,
     shareProject,
     stepStatuses,
     isLoading
   } = useCartoon();
-
-  // Get story summary from script
-  const storySummary = script?.summary || "Your story will appear here once you've created a script.";
   
-  // Preview image source (show most recent available content)
-  const previewImage = finalVideo?.thumbnailUrl || 
-                      (visuals?.scenes && visuals.scenes.length > 0 ? visuals.scenes[0].imageUrl : null) ||
-                      (characters?.mainCharacterUrl || null);
-
+  const [previewImage, setPreviewImage] = useState<string | null>(null);
+  const [storySummary, setStorySummary] = useState<string>("Your day as a cartoon will appear here...");
+  const [cartoonData, setCartoonData] = useState<any | null>(null);
+  
+  // Update preview image based on the current progress
+  useEffect(() => {
+    if (visuals && visuals.scenes && visuals.scenes.length > 0) {
+      setPreviewImage(visuals.scenes[0].imageUrl);
+    } else if (script) {
+      setStorySummary(script.summary);
+    }
+  }, [script, visuals]);
+  
+  // Fetch cartoon data if it's a JSON file
+  useEffect(() => {
+    if (finalVideo?.url && finalVideo.duration === "Animated Slideshow" && finalVideo.url.endsWith('.json')) {
+      fetch(finalVideo.url)
+        .then(response => {
+          if (!response.ok) {
+            throw new Error('Failed to fetch cartoon data');
+          }
+          return response.json();
+        })
+        .then(data => {
+          setCartoonData(data);
+        })
+        .catch(error => {
+          console.error('Error fetching cartoon data:', error);
+        });
+    }
+  }, [finalVideo]);
+  
   return (
-    <div className="bg-white rounded-xl shadow-md sticky top-6">
-      <div className="p-6 border-b border-neutral-200">
-        <h3 className="font-sans font-semibold text-lg text-neutral-800">Preview</h3>
+    <div className="bg-white rounded-lg shadow-md overflow-hidden">
+      <div className="border-b p-6">
+        <h3 className="text-xl font-medium text-neutral-800">Preview</h3>
         <p className="text-neutral-600 text-sm">See how your cartoon is coming together</p>
       </div>
       
       <div className="p-6">
         {/* Video Preview Container */}
         <div className="preview-container bg-neutral-900 rounded-lg overflow-hidden mb-4" style={{ minHeight: "300px" }}>
-          <div className="w-full h-full flex items-center justify-center relative" style={{ minHeight: "300px" }}>
-            {finalVideo?.url ? (
-              finalVideo.duration === "Image Preview" ? (
-                // If it's an image preview (not a real video), show the image
+          {finalVideo?.url ? (
+            finalVideo.duration === "Animated Slideshow" ? (
+              // If it's an animated slideshow, use the animated player
+              cartoonData ? (
+                <AnimatedScenesPlayer 
+                  scenes={cartoonData.scenes}
+                  dialogueLines={cartoonData.dialogue.lines}
+                  style={{ minHeight: "300px" }}
+                />
+              ) : (
+                // Show loading state while fetching cartoon data
+                <div className="w-full h-full flex items-center justify-center" style={{ minHeight: "300px" }}>
+                  <p className="text-white">Loading cartoon scenes...</p>
+                </div>
+              )
+            ) : finalVideo.duration === "Image Preview" ? (
+              // If it's a single image preview, show the image
+              <div className="w-full h-full flex items-center justify-center relative" style={{ minHeight: "300px" }}>
                 <img 
                   src={finalVideo.url} 
                   alt="Final cartoon scene" 
@@ -47,51 +86,64 @@ export default function PreviewPanel() {
                     e.currentTarget.src = "/generated/fallback-thumbnail.svg";
                   }}
                 />
-              ) : (
-                // If it's a real video, use the video player
+              </div>
+            ) : (
+              // If it's a real video, use the video player
+              <div className="w-full h-full flex items-center justify-center relative" style={{ minHeight: "300px" }}>
                 <video 
                   src={finalVideo.url} 
                   controls 
                   poster={finalVideo.thumbnailUrl}
                   className="w-full h-full object-contain"
                 />
-              )
-            ) : (
-              <>
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <svg 
-                    xmlns="http://www.w3.org/2000/svg" 
-                    width="64" 
-                    height="64" 
-                    viewBox="0 0 24 24" 
-                    fill="none" 
-                    stroke="currentColor" 
-                    strokeWidth="2" 
-                    strokeLinecap="round" 
-                    strokeLinejoin="round" 
-                    className="text-white text-opacity-70"
-                  >
-                    <circle cx="12" cy="12" r="10"></circle>
-                    <polygon points="10 8 16 12 10 16 10 8"></polygon>
-                  </svg>
-                </div>
-                {previewImage ? (
-                  <img 
-                    src={previewImage} 
-                    alt="Video preview" 
-                    className="w-full h-full object-contain opacity-80"
-                    style={{ maxHeight: "300px", margin: "0 auto" }}
-                    onError={(e) => {
-                      console.error("Image failed to load:", previewImage);
-                      e.currentTarget.src = "/generated/fallback-thumbnail.svg";
-                    }}
-                  />
-                ) : (
-                  <div className="w-full h-full bg-neutral-800"></div>
-                )}
-              </>
-            )}
-          </div>
+              </div>
+            )
+          ) : (
+            // Show scenes from visuals if available, otherwise show placeholder
+            <div className="w-full h-full flex items-center justify-center relative" style={{ minHeight: "300px" }}>
+              {visuals?.scenes && visuals.scenes.length > 0 ? (
+                <AnimatedScenesPlayer 
+                  scenes={visuals.scenes}
+                  dialogueLines={dialogue?.lines || []}
+                  style={{ minHeight: "300px" }}
+                />
+              ) : (
+                <>
+                  <div className="absolute inset-0 flex items-center justify-center">
+                    <svg 
+                      xmlns="http://www.w3.org/2000/svg" 
+                      width="64" 
+                      height="64" 
+                      viewBox="0 0 24 24" 
+                      fill="none" 
+                      stroke="currentColor" 
+                      strokeWidth="2" 
+                      strokeLinecap="round" 
+                      strokeLinejoin="round" 
+                      className="text-white text-opacity-70"
+                    >
+                      <circle cx="12" cy="12" r="10"></circle>
+                      <polygon points="10 8 16 12 10 16 10 8"></polygon>
+                    </svg>
+                  </div>
+                  {previewImage ? (
+                    <img 
+                      src={previewImage} 
+                      alt="Video preview" 
+                      className="w-full h-full object-contain opacity-80"
+                      style={{ maxHeight: "300px", margin: "0 auto" }}
+                      onError={(e) => {
+                        console.error("Image failed to load:", previewImage);
+                        e.currentTarget.src = "/generated/fallback-thumbnail.svg";
+                      }}
+                    />
+                  ) : (
+                    <div className="w-full h-full bg-neutral-800"></div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
         </div>
         
         {/* Current Progress */}
@@ -129,7 +181,7 @@ export default function PreviewPanel() {
         <div className="mb-6">
           <h4 className="font-medium text-neutral-800 mb-2">Story Summary</h4>
           <p className="text-sm text-neutral-600">
-            {storySummary}
+            {cartoonData?.script?.summary || storySummary}
           </p>
         </div>
         
