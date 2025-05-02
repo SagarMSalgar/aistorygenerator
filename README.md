@@ -108,9 +108,6 @@ npm run dev
 - **Mood Analysis**: Detects emotional tone from text to select appropriate music
 - **Dynamic Character Personalities**: Characters reflect the context and relationships in your story
 
-## 📝 License
-
-This project is licensed under the MIT License - see the LICENSE file for details.
 
 ## 🙏 Acknowledgments
 
