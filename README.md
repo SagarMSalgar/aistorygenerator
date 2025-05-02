@@ -64,7 +64,6 @@ The system employs a multi-agent architecture where specialized AI components wo
 1. Clone the repository
 ```bash
 git clone https://github.com/yourusername/day-to-cartoon.git
-cd day-to-cartoon
 ```
 
 2. Install dependencies
@@ -75,7 +74,7 @@ npm install
 3. Set up environment variables (create a `.env` file)
 ```
 DATABASE_URL=postgresql://user:password@localhost:5432/daytocartoon
-HUGGINGFACE_API_KEY=your_huggingface_api_key
+GEMINI_API_KEY=your_gemini_api_key
 STABILITY_API_KEY=your_stability_api_key
 ```
 
@@ -115,5 +114,5 @@ npm run dev
 - UI components from [shadcn/ui](https://ui.shadcn.com/)
 - Styling with [TailwindCSS](https://tailwindcss.com/)
 - AI image generation from [Stability AI](https://stability.ai/)
-- Text generation via [Hugging Face](https://huggingface.co/)
+- Text generation via Gemini
 - Royalty-free music from [Pixabay](https://pixabay.com/)
