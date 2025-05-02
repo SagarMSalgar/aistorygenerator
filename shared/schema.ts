@@ -13,6 +13,7 @@ export type StepStatus = 'waiting' | 'active' | 'in-progress' | 'complete';
 export type ScriptData = {
   content: string;
   summary: string;
+  title: string;
 };
 
 export type CharacterData = {

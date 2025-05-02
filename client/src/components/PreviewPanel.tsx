@@ -95,6 +95,12 @@ export default function PreviewPanel() {
                   controls 
                   poster={finalVideo.thumbnailUrl}
                   className="w-full h-full object-contain"
+                  onError={(e) => {
+                    console.error('Video playback error:', e);
+                  }}
+                  onLoadedData={() => {
+                    console.log('Video loaded successfully');
+                  }}
                 />
               </div>
             )

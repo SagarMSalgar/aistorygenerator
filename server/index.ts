@@ -44,6 +44,19 @@ app.use((req, res, next) => {
   next();
 });
 
+// Serve static files from the public directory
+app.use(express.static(path.join(process.cwd(), 'public')));
+
+// Add error handling for static files
+app.use((err: any, req: express.Request, res: express.Response, next: express.NextFunction) => {
+  if (err.code === 'ENOENT') {
+    console.error('File not found:', req.path);
+    res.status(404).json({ error: 'File not found' });
+  } else {
+    next(err);
+  }
+});
+
 (async () => {
   const server = await registerRoutes(app);
 

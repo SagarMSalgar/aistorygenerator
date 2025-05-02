@@ -1,210 +1,289 @@
-import { db } from "./index";
-import * as schema from "@shared/schema";
-import { nanoid } from "nanoid";
+import fs from 'fs/promises';
+import path from 'path';
+import { nanoid } from 'nanoid';
+import { drizzle } from 'drizzle-orm/neon-serverless';
+import { Pool, neonConfig } from '@neondatabase/serverless';
+import ws from 'ws';
+import {
+  projects,
+  scripts,
+  characters,
+  dialogues,
+  visuals,
+  music,
+  videos
+} from '@shared/schema';
+import { GoogleGenerativeAI } from '@google/generative-ai';
+import { ScriptData } from '@shared/schema';
 
-// Create fallback assets for when API calls fail
+// Configure neon
+neonConfig.webSocketConstructor = ws;
+
+// Create the database connection directly
+const pool = new Pool({ connectionString: process.env.DATABASE_URL });
+const db = drizzle(pool);
+
+const genAI = new GoogleGenerativeAI(process.env.GEMINI_API_KEY || "");
+
+// Create necessary directories
+async function ensureDirectoriesExist() {
+  const outputDir = path.resolve('dist/public/generated');
+  await fs.mkdir(outputDir, { recursive: true });
+  return outputDir;
+}
+
+// Create simple fallback SVG for test purposes
+async function createFallbackSVG(outputDir: string, name: string, color: string) {
+  const svgContent = `
+    <svg width="400" height="300" xmlns="http://www.w3.org/2000/svg">
+      <rect width="100%" height="100%" fill="${color}" />
+      <text x="50%" y="50%" font-family="Arial" font-size="24" fill="white" text-anchor="middle">
+        ${name} Fallback
+      </text>
+    </svg>
+  `;
+  const filePath = path.join(outputDir, `fallback-${name}.svg`);
+  await fs.writeFile(filePath, svgContent);
+  console.log(`Created fallback ${name} SVG at ${filePath}`);
+  return `/generated/fallback-${name}.svg`;
+}
+
+// Create a simple audio placeholder
+async function createFallbackAudio(outputDir: string) {
+  // Create an empty MP3 file as placeholder
+  // In real usage, you'd include a small audio file in your repo
+  const filePath = path.join(outputDir, 'fallback-music.mp3');
+  await fs.writeFile(filePath, '');
+  console.log(`Created empty fallback music file at ${filePath}`);
+  return `/generated/fallback-music.mp3`;
+}
+
+// Create all fallback assets
 async function createFallbackAssets() {
-  // Define a basic SVG for fallback character
-  const mainCharSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
-  <circle cx="150" cy="100" r="50" fill="#6200EA" />
-  <rect x="100" y="150" width="100" height="100" fill="#B388FF" />
-  <circle cx="125" cy="85" r="10" fill="white" />
-  <circle cx="175" cy="85" r="10" fill="white" />
-  <path d="M 130 120 Q 150 140 170 120" stroke="white" stroke-width="3" fill="none" />
-</svg>
-  `.trim();
-
-  // Define a basic SVG for fallback supporting characters
-  const supportingCharsSvg = `
-<svg xmlns="http://www.w3.org/2000/svg" width="300" height="300" viewBox="0 0 300 300">
-  <circle cx="75" cy="100" r="30" fill="#03DAC6" />
-  <rect x="50" y="130" width="50" height="70" fill="#84FFFF" />
-  <circle cx="150" cy="100" r="30" fill="#018786" />
-  <rect x="125" y="130" width="50" height="70" fill="#84FFFF" />
-  <circle cx="225" cy="100" r="30" fill="#03DAC6" />
-  <rect x="200" y="130" width="50" height="70" fill="#84FFFF" />
-</svg>
-  `.trim();
-
-  // Define basic SVGs for fallback scenes
-  const sceneSvgs = [
-    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-      <rect width="640" height="360" fill="#E0E0E0" />
-      <rect x="0" y="180" width="640" height="180" fill="#BDBDBD" />
-      <circle cx="480" cy="80" r="40" fill="#FFC107" />
-      <rect x="280" y="160" width="80" height="120" fill="#6200EA" />
-      <rect x="320" y="220" width="40" height="60" fill="#B388FF" />
-    </svg>`,
-    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-      <rect width="640" height="360" fill="#F5F5F5" />
-      <rect x="40" y="80" width="200" height="200" fill="#BDBDBD" />
-      <rect x="400" y="80" width="200" height="200" fill="#BDBDBD" />
-      <rect x="80" y="120" width="40" height="40" fill="#03DAC6" />
-      <rect x="160" y="120" width="40" height="40" fill="#03DAC6" />
-      <rect x="440" y="120" width="40" height="40" fill="#03DAC6" />
-      <rect x="520" y="120" width="40" height="40" fill="#03DAC6" />
-      <rect x="320" y="180" width="40" height="100" fill="#6200EA" />
-    </svg>`,
-    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-      <rect width="640" height="360" fill="#BBDEFB" />
-      <rect x="0" y="260" width="640" height="100" fill="#81C784" />
-      <circle cx="320" cy="240" r="20" fill="#6200EA" />
-      <circle cx="200" cy="220" r="30" fill="#4CAF50" />
-      <circle cx="400" cy="230" r="25" fill="#4CAF50" />
-      <circle cx="150" cy="240" r="15" fill="#CDDC39" />
-      <circle cx="450" cy="250" r="15" fill="#CDDC39" />
-    </svg>`,
-    `<svg xmlns="http://www.w3.org/2000/svg" width="640" height="360" viewBox="0 0 640 360">
-      <rect width="640" height="360" fill="#37474F" />
-      <rect x="100" y="100" width="200" height="150" fill="#78909C" />
-      <rect x="140" y="150" width="50" height="100" fill="#B388FF" />
-      <rect x="120" y="120" width="40" height="40" fill="#FFC107" />
-      <rect x="240" y="120" width="40" height="40" fill="#FFC107" />
-      <circle cx="500" cy="80" r="30" fill="#E0E0E0" />
-      <circle cx="320" cy="180" r="20" fill="#6200EA" />
-    </svg>`
-  ];
-
   try {
-    // Using native fs/promises instead of require
-    import fs from 'fs/promises';
-    import path from 'path';
-    
-    const generatedDir = path.resolve('dist/public/generated');
-    
-    // Create directories if they don't exist
-    try {
-      await fs.mkdir('dist', { recursive: true });
-      await fs.mkdir('dist/public', { recursive: true });
-      await fs.mkdir(generatedDir, { recursive: true });
-    } catch (err) {
-      // Directory might already exist, which is fine
-      console.log('Note: Some directories may already exist');
-    }
-
-    // Write main character SVG
-    await fs.writeFile(path.join(generatedDir, 'fallback-main-character.svg'), mainCharSvg);
-    
-    // Write supporting characters SVG
-    await fs.writeFile(path.join(generatedDir, 'fallback-supporting-characters.svg'), supportingCharsSvg);
-    
-    // Write scene SVGs
-    for (let i = 0; i < sceneSvgs.length; i++) {
-      await fs.writeFile(path.join(generatedDir, `fallback-scene-${i + 1}.svg`), sceneSvgs[i]);
-    }
-    
-    // Create empty audio files for fallback
-    await fs.writeFile(path.join(generatedDir, 'fallback-music.mp3'), '');
-    await fs.writeFile(path.join(generatedDir, 'fallback-music-preview.mp3'), '');
-    await fs.writeFile(path.join(generatedDir, 'fallback-thumbnail.svg'), sceneSvgs[0]);
-    
+    const outputDir = await ensureDirectoriesExist();
+    // Create fallback images
+    await createFallbackSVG(outputDir, 'thumbnail', '#3b82f6');
+    await createFallbackSVG(outputDir, 'main-character', '#10b981');
+    await createFallbackSVG(outputDir, 'supporting-characters', '#8b5cf6');
+    // Create fallback scene images
+    await createFallbackSVG(outputDir, 'scene-1', '#ef4444');
+    await createFallbackSVG(outputDir, 'scene-2', '#f59e0b');
+    await createFallbackSVG(outputDir, 'scene-3', '#3b82f6');
+    await createFallbackSVG(outputDir, 'scene-4', '#8b5cf6');
+    // Create fallback audio
+    await createFallbackAudio(outputDir);
+    const previewPath = await createFallbackAudio(outputDir);
     console.log('Created fallback assets successfully');
+    return {
+      thumbnail: `/generated/fallback-thumbnail.svg`,
+      mainCharacter: `/generated/fallback-main-character.svg`,
+      supportingCharacters: `/generated/fallback-supporting-characters.svg`,
+      scenes: [
+        `/generated/fallback-scene-1.svg`,
+        `/generated/fallback-scene-2.svg`,
+        `/generated/fallback-scene-3.svg`,
+        `/generated/fallback-scene-4.svg`
+      ],
+      music: `/generated/fallback-music.mp3`,
+      musicPreview: previewPath
+    };
   } catch (error) {
     console.error('Error creating fallback assets:', error);
+    throw error;
   }
 }
 
-// Create a demo project
+// Create a demo project with basic data
 async function createDemoProject() {
   try {
-    // Check if we already have a demo project
-    const existingProjects = await db.query.projects.findMany({
-      limit: 1
-    });
-    
-    if (existingProjects.length > 0) {
-      console.log('Demo project already exists, skipping creation');
-      return;
-    }
-    
-    // Create a new project
-    const [project] = await db.insert(schema.projects).values({
-      dayDescription: "Today, I woke up feeling energetic. I had a productive meeting at work where my ideas were appreciated. Later, I went for a walk in the park and saw some cute dogs playing. Overall, it was a positive day with small wins!",
-      status: 'in_progress',
-      isPublic: false,
-      shareToken: nanoid(10)
+    // Get fallback assets
+    const assets = await createFallbackAssets();
+    // Create project
+    const [project] = await db.insert(projects).values({
+      dayDescription: "I woke up early, had a productive morning at work, met friends for lunch, and relaxed in the evening by watching a movie.",
+      status: 'completed',
+      isPublic: true,
+      shareToken: nanoid(10),
+      createdAt: new Date()
     }).returning();
-    
-    // Add demo script
-    await db.insert(schema.scripts).values({
+    console.log('Created demo project:', project.id);
+    // Add script
+    await db.insert(scripts).values({
       projectId: project.id,
-      content: `Title: "Small Victories"
-      
-Scene 1: Morning Sunrise
-Our protagonist wakes up as sunlight streams through the window, feeling unusually energetic.
-
-Scene 2: The Big Meeting
-At the office, our protagonist presents ideas that colleagues respond to with enthusiasm.
-
-Scene 3: Afternoon Respite
-A peaceful walk through the park, watching playful dogs brings joy and reflection.
-
-Scene 4: Evening Contentment
-Day ends with a sense of accomplishment and appreciation for the small wins.`,
-      summary: "A day-in-the-life story about appreciating the small victories that add up to a fulfilling day. From a productive meeting to peaceful moments in the park, our protagonist learns that sometimes the best days aren't about big achievements but about small moments of connection and progress."
+      content: "Title: \"A Day of Balance\"\n\nScene 1: Morning Beginnings\nThe day starts with energy and possibility as our character prepares for what lies ahead.\n\nScene 2: Work Time\nOur character tackles work challenges with determination and creativity.\n\nScene 3: Friendship Time\nA moment with friends brings laughter and connection.\n\nScene 4: Entertainment Time\nScreen time provides relaxation and escape from daily pressures.\n\nScene 5: Day's End\nThe journey concludes with a sense of accomplishment and anticipation for what's next.",
+      summary: "This cartoon tells the story of a day filled with balance, showing 5 key moments from the protagonist's experiences. From the energetic morning start through work activities, social connections, and relaxation, to the reflective conclusion.",
+      createdAt: new Date()
     });
-    
-    // Add demo characters
-    await db.insert(schema.characters).values({
+    // Add characters
+    await db.insert(characters).values({
       projectId: project.id,
-      mainCharacterUrl: "/generated/fallback-main-character.svg",
-      mainCharacterDescription: "Stylized, optimistic persona with energetic features",
-      supportingCharactersUrl: "/generated/fallback-supporting-characters.svg",
-      supportingCharactersDescription: "Colleagues, park visitors, and playful dogs"
+      mainCharacterUrl: assets.mainCharacter,
+      mainCharacterDescription: "A friendly, professional-looking individual with an expressive face, business casual attire, and a positive demeanor.",
+      supportingCharactersUrl: assets.supportingCharacters,
+      supportingCharactersDescription: "A diverse group of friends and colleagues with distinct personalities, including a cheerful friend, a serious coworker, and a relaxed movie companion.",
+      createdAt: new Date()
     });
-    
-    // Add demo dialogue
-    await db.insert(schema.dialogues).values({
+    // Add dialogue
+    await db.insert(dialogues).values({
       projectId: project.id,
       lines: [
-        { character: "MAIN CHARACTER", text: "Today feels different somehow. Like something good is waiting just around the corner." },
-        { character: "BOSS", text: "I have to say, that presentation was exactly what we needed. Great job!" },
-        { character: "MAIN CHARACTER", text: "Sometimes it's the small wins that make all the difference." },
-        { character: "STRANGER AT PARK", text: "Cute dogs, aren't they? Always living in the moment." },
-        { character: "MAIN CHARACTER", text: "In a world of big expectations, today reminded me that life is made of little moments worth celebrating." }
-      ]
+        { character: "NARRATOR", text: "As the sun rises on a new day, our story begins." },
+        { character: "MAIN CHARACTER", text: "It's going to be a great day today! I can feel it." },
+        { character: "COLLEAGUE", text: "Great job on that project! You're really making progress." },
+        { character: "MAIN CHARACTER", text: "Thanks! I've been putting in extra effort lately." },
+        { character: "FRIEND", text: "It's so good to see you! How has your week been?" },
+        { character: "MAIN CHARACTER", text: "Busy but good! This lunch break is exactly what I needed." },
+        { character: "MAIN CHARACTER", text: "Time to relax and unwind with a good movie." },
+        { character: "FRIEND", text: "Sometimes you need to take time for yourself after a busy day." },
+        { character: "NARRATOR", text: "And as this day comes to a close, tomorrow waits with new possibilities." }
+      ],
+      createdAt: new Date()
     });
-    
-    // Add demo visuals
-    await db.insert(schema.visuals).values({
+    // Add visuals
+    await db.insert(visuals).values({
       projectId: project.id,
       scenes: [
-        {
-          imageUrl: "/generated/fallback-scene-1.svg",
-          description: "Morning scene with the main character waking up and starting their day."
-        },
-        {
-          imageUrl: "/generated/fallback-scene-2.svg",
-          description: "Office scene with the main character presenting ideas to colleagues."
-        },
-        {
-          imageUrl: "/generated/fallback-scene-3.svg",
-          description: "Park scene with dogs playing and the main character observing."
-        },
-        {
-          imageUrl: "/generated/fallback-scene-4.svg",
-          description: "Evening scene with the main character reflecting on the day's events."
-        }
-      ]
+        { imageUrl: assets.scenes[0], description: "Morning scene - Starting the day with coffee and preparation" },
+        { imageUrl: assets.scenes[1], description: "Work scene - Focused at a desk with computer and notes" },
+        { imageUrl: assets.scenes[2], description: "Lunch scene - Enjoying conversation with friends at café" },
+        { imageUrl: assets.scenes[3], description: "Evening scene - Relaxing on a couch watching a movie" }
+      ],
+      createdAt: new Date()
     });
-    
-    console.log('Created demo project successfully');
+    // Add music
+    await db.insert(music).values({
+      projectId: project.id,
+      title: "Balanced Day",
+      artist: "Demo Artist",
+      genre: "Upbeat",
+      mood: "Cheerful",
+      license: "Creative Commons Zero",
+      url: assets.music,
+      previewUrl: assets.musicPreview,
+      createdAt: new Date()
+    });
+    // Add video
+    const cartoonId = nanoid(8);
+    const cartoonData = {
+      script: {
+        content: "Title: \"A Day of Balance\"\n\nScene 1: Morning Beginnings\nThe day starts with energy and possibility as our character prepares for what lies ahead.\n\nScene 2: Work Time\nOur character tackles work challenges with determination and creativity.\n\nScene 3: Friendship Time\nA moment with friends brings laughter and connection.\n\nScene 4: Entertainment Time\nScreen time provides relaxation and escape from daily pressures.\n\nScene 5: Day's End\nThe journey concludes with a sense of accomplishment and anticipation for what's next.",
+        summary: "This cartoon tells the story of a day filled with balance, showing 5 key moments from the protagonist's experiences."
+      },
+      scenes: [
+        { imageUrl: assets.scenes[0], description: "Morning scene - Starting the day with coffee and preparation" },
+        { imageUrl: assets.scenes[1], description: "Work scene - Focused at a desk with computer and notes" },
+        { imageUrl: assets.scenes[2], description: "Lunch scene - Enjoying conversation with friends at a café" },
+        { imageUrl: assets.scenes[3], description: "Evening scene - Relaxing on a couch watching a movie" }
+      ],
+      dialogue: {
+        lines: [
+          { character: "NARRATOR", text: "As the sun rises on a new day, our story begins." },
+          { character: "MAIN CHARACTER", text: "It's going to be a great day today! I can feel it." },
+          { character: "COLLEAGUE", text: "Great job on that project! You're really making progress." },
+          { character: "MAIN CHARACTER", text: "Thanks! I've been putting in extra effort lately." },
+          { character: "FRIEND", text: "It's so good to see you! How has your week been?" },
+          { character: "MAIN CHARACTER", text: "Busy but good! This lunch break is exactly what I needed." },
+          { character: "MAIN CHARACTER", text: "Time to relax and unwind with a good movie." },
+          { character: "FRIEND", text: "Sometimes you need to take time for yourself after a busy day." },
+          { character: "NARRATOR", text: "And as this day comes to a close, tomorrow waits with new possibilities." }
+        ]
+      }
+    };
+    // Save cartoon data JSON file
+    const outputDir = path.resolve('dist/public/generated');
+    const cartoonDataFileName = `cartoon-data-${cartoonId}.json`;
+    const cartoonDataPath = path.join(outputDir, cartoonDataFileName);
+    await fs.writeFile(cartoonDataPath, JSON.stringify(cartoonData, null, 2));
+    await db.insert(videos).values({
+      projectId: project.id,
+      url: `/generated/${cartoonDataFileName}`,
+      thumbnailUrl: assets.thumbnail,
+      duration: "Animated Slideshow",
+      createdAt: new Date()
+    });
+    console.log('Created complete demo project successfully');
   } catch (error) {
     console.error('Error creating demo project:', error);
+    throw error;
   }
 }
 
+// Main seed function
 async function seed() {
   try {
-    // Create fallback assets
     await createFallbackAssets();
-    
-    // Create a demo project
     await createDemoProject();
+    console.log('Seed completed successfully');
   } catch (error) {
-    console.error(error);
+    console.error('Seed failed:', error);
   }
 }
 
+// Run seed function
 seed();
+
+export const scriptAgent = {
+  async generateScript(dayDescription: string): Promise<ScriptData> {
+    try {
+      // Initialize Gemini model
+      const model = genAI.getGenerativeModel({ model: "gemini-pro" });
+
+      // Analyze story and generate script
+      const prompt = `
+        Analyze this person's day and create a 1-minute animated cartoon script:
+        "${dayDescription}"
+
+        Consider:
+        1. Key events and emotional moments
+        2. Character interactions and relationships
+        3. Story arc with beginning, middle, and end
+        4. Potential for visual storytelling
+        5. Overall mood and tone
+
+        Generate:
+        1. A creative title
+        2. A brief summary
+        3. 4-5 scenes with descriptions
+        4. Scene transitions
+        5. Emotional beats
+
+        Format as a proper script with scene headings and descriptions.
+      `;
+
+      const result = await model.generateContent(prompt);
+      const scriptText = result.response.text();
+
+      // Extract title and summary using Gemini
+      const analysisPrompt = `
+        From this script:
+        "${scriptText}"
+        
+        Extract:
+        1. The title
+        2. A one-paragraph summary
+        
+        Format as:
+        Title: [title]
+        Summary: [summary]
+      `;
+
+      const analysis = await model.generateContent(analysisPrompt);
+      const analysisText = analysis.response.text();
+
+      // Parse title and summary
+      const titleMatch = analysisText.match(/Title: (.*)/);
+      const summaryMatch = analysisText.match(/Summary: (.*)/);
+
+      return {
+        content: scriptText,
+        summary: summaryMatch?.[1] || "A day in the life story",
+        title: titleMatch?.[1] || "My Day as a Cartoon"
+      };
+
+    } catch (error) {
+      console.error('Error in script generation:', error);
+      throw error;
+    }
+  }
+};
